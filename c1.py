@@ -40,7 +40,7 @@ async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
         # 生成带时间戳和随机数的文件名
         timestamp = int(time.time())  # 返回秒级时间戳
         random_number = random.randint(1000, 9999)  # 生成4位随机数
-        output_dir = "/root/CosyVoice/"
+        output_dir = "/root/CosyVoice/upload"
         
         # 确保目录存在
         os.makedirs(output_dir, exist_ok=True)
