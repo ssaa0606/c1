@@ -5,14 +5,9 @@ import argparse
 import logging
 import time
 import random
-from fastapi import FastAPI, UploadFile, Form, File
+import torchaudio
+from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import numpy as np
-
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append('{}/../../..'.format(ROOT_DIR))
-sys.path.append('{}/../../../third_party/Matcha-TTS'.format(ROOT_DIR))
 from cosyvoice.cli.cosyvoice import CosyVoice
 from cosyvoice.utils.file_utils import load_wav
 
@@ -30,17 +25,20 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# 初始化 CosyVoice 模型
+cosyvoice = CosyVoice('pretrained_models/CosyVoice-300M-SFT', load_jit=True, load_onnx=False, fp16=True)
+
 @app.post("/inference_sft")
 async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
     try:
         # 生成音频数据
         logging.info(f"Received request for text: {tts_text} with speaker id: {spk_id}")
-        model_output = cosyvoice.inference_sft(tts_text, spk_id)
+        model_output = cosyvoice.inference_sft(tts_text, spk_id, stream=False)
 
         # 生成带时间戳和随机数的文件名
         timestamp = int(time.time())  # 返回秒级时间戳
         random_number = random.randint(1000, 9999)  # 生成4位随机数
-        output_dir = "/root/CosyVoice/upload"
+        output_dir = "/root/CosyVoice/"
         
         # 确保目录存在
         os.makedirs(output_dir, exist_ok=True)
@@ -48,13 +46,11 @@ async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
 
         audio_file_path = f"{output_dir}{timestamp}_{random_number}.wav"  # 使用f-string嵌入路径
 
-        # 将生成的音频保存为 WAV 文件
-        with open(audio_file_path, 'wb') as f:
-            logging.info(f"Saving WAV file to {audio_file_path}")
-            for i in model_output:
-                tts_audio = (i['tts_speech'].numpy() * (2 ** 15)).astype(np.int16).tobytes()
-                f.write(tts_audio)
-        
+        # 使用 torchaudio 保存 WAV 文件
+        for i, j in enumerate(model_output):
+            # 每个生成的块保存为 wav 文件（假设每次生成一个完整的文件）
+            torchaudio.save(audio_file_path, j['tts_speech'], 22050)  # 22050 是采样率
+
         logging.info(f"WAV file saved successfully: {audio_file_path}")
 
         # 返回完整的音频文件
